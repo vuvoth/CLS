@@ -190,34 +190,44 @@ pub enum TokenKind {
     ReturnKw,
     #[token("assert")]
     AssertKw,
-    // Complex token kind
-    ForLoop,
+    // Statements
+    IfStatement,
+    AssertStatement,
+    LogStatement,
+    ReturnStatement,
     AssignStatement,
+    ForLoop,
+    WhileLoop,
+    // Program
     CircomProgram,
-    SignalOfComponent,
+    // Function
+    FunctionDef,
+    FunctionName,
+    // Template
+    TemplateDef,
+    TemplateName,
+    // Signal
+    SignalDecl,
+    InputSignalDecl,
+    OutputSignalDecl,
     SignalHeader,
+    SignalIdentifier,
+    // Variable
+    VarDecl,
+    // Component
+    ComponentDecl,
+    ComponentCall,
+    ComponentIdentifier,
+    SignalOfComponent,
+    // Complex token kind
     Block,
-    Tuple,
-    TupleInit,
+    ParameterList,
     Call,
     TenaryConditional,
     Condition,
     Expression,
-    FunctionDef,
     Statement,
     StatementList,
-    ComponentDecl,
-    TemplateDef,
-    TemplateName,
-    FunctionName,
-    ParameterList,
-    SignalDecl,
-    VarDecl,
-    InputSignalDecl,
-    OutputSignalDecl,
-    ComponentCall,
-    ComponentIdentifier,
-    SignalIdentifier,
     ArrayQuery,
     ParserError,
     BlockComment,
@@ -277,8 +287,7 @@ impl TokenKind {
             | Self::GreaterThan
             | Self::LessThanAndEqual
             | Self::GreaterThanAndEqual => Some((79, 80)),
-            Self::Equal
-            | Self::NotEqual => Some((74, 75)),
+            Self::Equal | Self::NotEqual => Some((74, 75)),
             // other bitwise operators
             Self::BitAnd => Some((69, 70)),
             Self::BitXor => Some((64, 65)), // exclusive or
@@ -288,11 +297,20 @@ impl TokenKind {
             Self::BoolOr => Some((49, 50)),
             // ----------
             // TODO: how about conditional operation ( ? : )
-            // associativity: right to left [ a ? b : c --> ??? ] 
+            // associativity: right to left [ a ? b : c --> ??? ]
+
             // ----------
-            // associativity: right to left [ a = b = c --> a = (b = c) ] 
+            // associativity: right to left [ a = b = c --> a = (b = c) ]
+            // DO NOT CONSIDER ASSIGMENT OPERATORS AS INFIX TOKENS
+            /*
             // assignment operators
             Self::Assign
+            // signal assigment operators
+            | Self::EqualSignal
+            | Self::LAssignSignal
+            | Self::LAssignContraintSignal
+            | Self::RAssignSignal
+            | Self::RAssignConstraintSignal
             // bitwise asignment operators
             | Self::BitOrAssign
             | Self::BitXorAssign
@@ -307,6 +325,7 @@ impl TokenKind {
             | Self::IntDivAssign
             | Self::ModAssign
             | Self::PowerAssign => Some((44, 45)),
+            */
             // TODO: how about comma (expression separator)
             Self::Comma => Some((39, 40)),
             // not an infix operator
@@ -344,6 +363,46 @@ impl TokenKind {
 
     pub fn is_declaration_kw(self) -> bool {
         matches!(self, Self::VarKw | Self::ComponentKw | Self::SignalKw)
+    }
+
+    pub fn is_assign_token(self) -> bool {
+        matches!(
+            self,
+            Self::Assign
+            // signal assigment operators
+            | Self::EqualSignal
+            | Self::LAssignSignal
+            | Self::LAssignContraintSignal
+            | Self::RAssignSignal
+            | Self::RAssignConstraintSignal
+            // bitwise asignment operators
+            | Self::BitOrAssign
+            | Self::BitXorAssign
+            | Self::BitAndAssign
+            | Self::ShiftLAssign
+            | Self::ShiftRAssign
+            // arithmetic asignament operators
+            | Self::AddAssign
+            | Self::SubAssign
+            | Self::MulAssign
+            | Self::DivAssign
+            | Self::IntDivAssign
+            | Self::ModAssign
+            | Self::PowerAssign // unit inc/dec
+                                // | Self::UnitInc
+                                // | Self::UnitDec
+        )
+    }
+
+    pub fn is_inline_assign_signal(self) -> bool {
+        matches!(
+            self,
+            Self::Assign | Self::RAssignSignal | Self::RAssignConstraintSignal
+        )
+    }
+
+    pub fn is_var_assign(self) -> bool {
+        matches!(self, Self::Assign)
     }
 
     pub fn is_trivial(self) -> bool {

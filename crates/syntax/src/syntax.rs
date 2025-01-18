@@ -238,7 +238,9 @@ mod tests {
 mod grammar_tests {
 
     use crate::{
-        abstract_syntax_tree::{AstBlock, AstOutputSignalDecl, AstPragma, AstTemplateDef},
+        abstract_syntax_tree::{
+            AstBlock, AstCircomProgram, AstOutputSignalDecl, AstPragma, AstTemplateDef,
+        },
         syntax::SyntaxTreeBuilder,
         syntax_node::CircomLanguage,
     };
@@ -316,22 +318,23 @@ mod grammar_tests {
         insta::assert_yaml_snapshot!(name, @"MultiplierN");
 
         // parameter list
-        let first_param = template
+        let paramater_list = template
             .parameter_list()
             .expect("Can not detect parameter list")
+            .parameters();
+
+        let first_param = paramater_list
+            .get(0)
+            .expect("Can not detect first parameter")
             .syntax()
-            .first_child()
-            .unwrap()
             .text()
             .to_string();
         insta::assert_yaml_snapshot!(first_param, @"N");
 
-        let last_param = template
-            .parameter_list()
-            .expect("Can not detect parameter list")
+        let last_param = paramater_list
+            .last()
+            .expect("Can not detect last parameter")
             .syntax()
-            .last_child()
-            .unwrap()
             .text()
             .to_string();
         insta::assert_yaml_snapshot!(last_param, @"QQ");
@@ -355,7 +358,7 @@ mod grammar_tests {
             .syntax()
             .text()
             .to_string();
-        insta::assert_yaml_snapshot!(input_signal, @"signal input in[N];");
+        insta::assert_yaml_snapshot!(input_signal, @r###""signal input in[N]""###);
 
         // output signal
         let output_signal = template
@@ -364,7 +367,7 @@ mod grammar_tests {
             .syntax()
             .text()
             .to_string();
-        insta::assert_yaml_snapshot!(output_signal, @"signal output out;");
+        insta::assert_yaml_snapshot!(output_signal, @"signal output out");
 
         // internal signal
         let internal_signal = template.find_internal_signal("in").is_none();
@@ -377,7 +380,7 @@ mod grammar_tests {
             .syntax()
             .text()
             .to_string();
-        insta::assert_yaml_snapshot!(component, @"component comp[N-1];");
+        insta::assert_yaml_snapshot!(component, @r###""component comp[N-1]""###);
     }
 
     #[test]
@@ -408,6 +411,8 @@ mod grammar_tests {
         // cast syntax node into ast node to retrieve more information
         let block = AstBlock::cast(syntax).expect("Can not cast syntax node into ast block");
 
+        println!("block: {}", block.syntax().text().to_string());
+
         // finally, assert with expect statements
         let statements = block.statement_list().unwrap().statement_list();
         let statements: Vec<String> = statements
@@ -415,5 +420,126 @@ mod grammar_tests {
             .map(|statement| statement.syntax().text().to_string())
             .collect();
         insta::assert_yaml_snapshot!("block_happy_test_statements", statements);
+    }
+
+    #[test]
+    fn statement_happy_test() {
+        let source = r#"{
+            //Statements.
+            for(var i = 0; i < N-1; i++){
+                comp[i] = Multiplier2();
+            }
+            comp[0].in1 <== in[0];
+            comp[0].in2 <== in[1];
+            for(var i = 0; i < N-2; i++){
+                comp[i+1].in1 <== comp[i].out;
+                comp[i+1].in2 <== in[i+2];
+
+            }
+            out <== comp[N-2].out; 
+
+            // just for testing statement
+            while (out) {
+                for(var i = 0; i < N-1; i++){
+                    comp[i] = Multiplier2();
+                }
+            }
+            assert(comp);
+            log("Print something...", out);
+     
+            if (1 < 2) {
+                log("Match...", 1 < 2);
+            } else {
+                log("Does not match...", 1 < 2);
+            }
+            
+            return out + comp;
+        }"#;
+
+        let syntax = syntax_node_from_source(&source, Scope::Block);
+
+        // cast syntax node into ast node to retrieve more information
+        let block = AstBlock::cast(syntax).expect("Can not cast syntax node into ast block");
+
+        let statements = block.statement_list().unwrap().statement_list();
+        let statements: Vec<String> = statements
+            .into_iter()
+            .map(|statement| statement.syntax().text().to_string())
+            .collect();
+        insta::assert_yaml_snapshot!("statement_happy_test_statements", statements);
+    }
+
+    #[test]
+    fn declaration_happy_test() {
+        // [scope: block] source must start with {
+        let source = r#"{
+            var nout = nbits((2**n -1)*ops);
+            signal input in[ops][n];
+            signal output out[nout];
+        
+            var lin = 0;
+            var lout = 0;
+        
+            var k;
+            var j;
+        
+            var e2;
+        
+            e2 = 1;
+            for (k=0; k<n; k+=1) {
+                for (j=0; j<ops; j++) {
+                    lin += in[j][k] * e2;
+                }
+                e2 = e2 + e2;
+            
+                e2 = 1;
+                for (k=0; k<nout; ++k) {
+                    out[k] <-- (lin >> k) & 1;
+            
+                    // Ensure out is binary
+                    out[k] * (out[k] - 1) === 0;
+            
+                    lout += out[k] * e2;
+            
+                    e2 = e2+e2;
+                }
+            
+                // Ensure the sum;
+            
+                lin === lout;
+            }
+    }"#;
+
+        let syntax = syntax_node_from_source(&source, Scope::Block);
+
+        // cast syntax node into ast node to retrieve more information
+        let block = AstBlock::cast(syntax).expect("Can not cast syntax node into ast block");
+
+        let string_syntax = block.syntax().text().to_string();
+        insta::assert_yaml_snapshot!("declaration_happy_test_source", string_syntax);
+    }
+
+    #[test]
+    fn function_happy_test() {
+        let source = r#"
+        function nbits(a) {
+            var n = 1;
+            var r = 0;
+            while (n-1<a) {
+                r++;
+                n *= 2;
+            }
+            return r;
+        }"#;
+
+        let syntax = syntax_node_from_source(&source, Scope::CircomProgram);
+
+        // cast syntax node into ast node to retrieve more information
+        let ast_circom =
+            AstCircomProgram::cast(syntax).expect("Can not cast syntax node into ast circom");
+        let function = &ast_circom.function_list()[0];
+
+        let string_function = function.syntax().text().to_string();
+        insta::assert_yaml_snapshot!("function_happy_test_source", string_function);
     }
 }
